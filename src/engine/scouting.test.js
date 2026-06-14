@@ -5,6 +5,11 @@ import {
   revealItem,
   isRevealed,
   canReveal,
+  deepDive,
+  deepDiveCost,
+  canDeepDive,
+  effectiveUncertainty,
+  potentialRange,
   LOCKED_ITEM_TYPES,
 } from './scouting.js';
 import { generateProspect } from './generator.js';
@@ -94,5 +99,80 @@ describe('token accounting', () => {
   it('canReveal reflects whether tokens remain', () => {
     expect(canReveal(createScoutingState(1))).toBe(true);
     expect(canReveal(createScoutingState(0))).toBe(false);
+  });
+});
+
+describe('deep dive', () => {
+  const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+  it('costs one fewer token than revealing each item piecemeal', () => {
+    expect(deepDiveCost(items, createScoutingState(10), 'p0')).toBe(2);
+  });
+
+  it('reveals every item on the prospect at the discounted cost', () => {
+    const state = deepDive(createScoutingState(10), items, 'p0');
+    expect(state.tokens).toBe(8); // 3 items for 2 tokens
+    for (const it of items) expect(isRevealed(state, 'p0', it.id)).toBe(true);
+  });
+
+  it('does not double-charge for already-revealed items', () => {
+    let state = revealItem(createScoutingState(10), 'p0', 'a'); // 9 left, a revealed
+    expect(deepDiveCost(items, state, 'p0')).toBe(1); // 2 remaining → cost 1
+    state = deepDive(state, items, 'p0');
+    expect(state.tokens).toBe(8);
+  });
+
+  it('is a no-op when it cannot be afforded', () => {
+    const state = createScoutingState(1); // need 2 for 3 fresh items
+    expect(canDeepDive(state, items, 'p0')).toBe(false);
+    expect(deepDive(state, items, 'p0')).toBe(state);
+  });
+});
+
+describe('projection band', () => {
+  it('potentialRange brackets the potential by the uncertainty', () => {
+    expect(potentialRange(80, 6)).toEqual({ low: 74, high: 86 });
+  });
+
+  it('a revealed sharpen tightens the effective uncertainty', () => {
+    const prospect = makeProspect(2);
+    const items = [
+      { id: 's1', type: 'sharpen', payload: { newUncertainty: 3 } },
+    ];
+    let state = createScoutingState(5);
+    expect(effectiveUncertainty(prospect, items, state)).toBe(prospect.scouted.uncertainty);
+    state = revealItem(state, prospect.id, 's1');
+    expect(effectiveUncertainty(prospect, items, state)).toBe(3);
+  });
+});
+
+describe('hidden intangible', () => {
+  it('an intangible report reveals the prospect\'s real hidden trait', () => {
+    for (let s = 0; s < 60; s++) {
+      const prospect = makeProspect(s);
+      const items = assignLockedItems(createRng(s + 200), prospect);
+      const report = items.find((i) => i.type === 'intangible');
+      if (!report) continue;
+      if (prospect.hidden.intangible) {
+        expect(report.payload.trait).toBe(prospect.hidden.intangible.trait);
+        expect(report.payload.positive).toBe(prospect.hidden.intangible.positive);
+      } else {
+        expect(report.payload.neutral).toBe(true);
+      }
+    }
+  });
+
+  it('positive traits carry a positive development nudge, negatives a negative one', () => {
+    for (let s = 0; s < 80; s++) {
+      const p = makeProspect(s);
+      const { intangible, intangibleMod } = p.hidden;
+      if (!intangible) {
+        expect(intangibleMod).toBe(0);
+      } else if (intangible.positive) {
+        expect(intangibleMod).toBeGreaterThan(0);
+      } else {
+        expect(intangibleMod).toBeLessThan(0);
+      }
+    }
   });
 });

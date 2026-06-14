@@ -1,15 +1,23 @@
 // Career simulation — the payoff layer.
 //
-// Players develop from their TRUE current ability toward their TRUE ceiling,
-// shaped by a development-rate roll and random events (breakouts, injuries,
-// late-career decline). Because the user drafted on the *scouted* (fogged)
-// projection, the gap between scouting and reality is what reveals busts and steals.
+// A career is decided in two steps:
+//   1. ONE career-level "realization" roll fixes how much of a prospect's hidden
+//      upside (trueCeiling − trueOverall) he actually reaches, nudged by his
+//      development rate, intangibles, injury proneness, and rare bust/breakout
+//      events. That fixes his realized career peak.
+//   2. A full, age-based career arc is drawn under that peak — a rookie ramp, a
+//      prime plateau, then decline — for a realistic number of seasons (busts
+//      wash out in a few years, stars play 15+).
+//
+// The verdict keys off the peak the player *actually achieves* on that arc, not a
+// lucky single-season noise spike — so stars stay rare and the gap between the
+// scouted projection and the real outcome is what produces busts and steals.
 
 import { ARCHETYPES } from './archetypes.js';
 
 export const VERDICTS = ['Bust', 'Role Player', 'Starter', 'All-Star', 'Superstar'];
 
-// Peak rating → career verdict.
+// Peak rating → career verdict. (Distribution is calibrated via scripts/calibrate.js.)
 export function verdictFor(peak) {
   if (peak >= 90) return 'Superstar';
   if (peak >= 82) return 'All-Star';
@@ -18,8 +26,16 @@ export function verdictFor(peak) {
   return 'Bust';
 }
 
+// Rare discrete career outcomes that widen the tails (tuned in Phase 2 calibration).
+const BUST_CHANCE = 0.13;
+const BREAKOUT_CHANCE = 0.08;
+
 function round1(n) {
   return Math.round(n * 10) / 10;
+}
+
+function clampRating(v) {
+  return Math.max(30, Math.min(99, v));
 }
 
 function positionOf(prospect) {
@@ -54,53 +70,117 @@ function statLine(rating, position, rng) {
   };
 }
 
-function clampRating(v) {
-  return Math.max(30, Math.min(99, v));
+function easeOut(t) {
+  return 1 - Math.pow(1 - t, 2);
 }
 
-function simulateMulti(prospect, rng) {
+// Step 1: the single roll that fixes how much of the hidden upside is realized.
+// Returns the realized career peak rating (can undershoot current ability on a
+// hard bust, or modestly overshoot the ceiling on a breakout).
+export function realizeCareerPeak(prospect, rng) {
   const { trueOverall, trueCeiling, developmentRate, injuryProneness } = prospect.hidden;
+  const intangibleMod = prospect.hidden.intangibleMod ?? 0; // Phase 3 wires this from traits
+  const gap = trueCeiling - trueOverall;
+
+  let realization = 0.62 + (developmentRate - 1.0) * 0.8 + intangibleMod;
+  realization += rng.gaussian(0, 0.16); // career-to-career variance
+  realization -= injuryProneness * 0.35; // injuries cost development
+
+  const roll = rng.next();
+  if (roll < BUST_CHANCE) {
+    realization -= rng.float(0.35, 0.75); // derailed — never put it together
+  } else if (roll > 1 - BREAKOUT_CHANCE) {
+    realization += rng.float(0.22, 0.5); // exceeded the projection
+  }
+
+  realization = Math.max(-0.25, Math.min(1.35, realization));
+  return clampRating(trueOverall + gap * realization);
+}
+
+// Better players stick around longer; busts flame out in a few seasons.
+function careerLengthFor(careerPeak, injuryProneness, rng) {
+  const quality = Math.max(0, (careerPeak - 52) / 38); // ~0 (bust) .. ~1.2 (superstar)
+  let length = rng.float(2, 5) + quality * 11;
+  length -= injuryProneness * rng.float(0, 7);
+  return Math.max(1, Math.min(19, Math.round(length)));
+}
+
+function awardsFor(seasons) {
+  let allStarCount = 0;
+  let allNbaCount = 0;
+  let mvpCount = 0;
+  for (const s of seasons) {
+    if (s.rating >= 82) allStarCount++;
+    if (s.rating >= 85) allNbaCount++;
+    if (s.rating >= 92) mvpCount++;
+  }
+  // `roy` is league-wide (one per draft class) — assigned in the Results layer.
+  return { roy: false, allStarCount, allNbaCount, mvpCount };
+}
+
+// Step 2: draw the age-based arc under the realized peak.
+function simulateMulti(prospect, rng) {
+  const { trueOverall, injuryProneness } = prospect.hidden;
   const position = positionOf(prospect);
-  const numSeasons = rng.int(5, 8);
+  const startAge = prospect.bio.age;
+
+  const careerPeak = realizeCareerPeak(prospect, rng);
+  const length = careerLengthFor(careerPeak, injuryProneness, rng);
+  const peakAge = startAge + rng.int(4, 7); // hits his prime a few years in
+  const declineRate = rng.float(1.6, 3.0);
+  const rookieRating = Math.min(trueOverall, careerPeak); // can't debut above his realized peak
 
   const seasons = [];
-  let current = trueOverall;
-  let peak = current;
+  for (let i = 0; i < length; i++) {
+    const age = startAge + i;
+    const inPrime = age >= peakAge && age <= peakAge + 2;
 
-  for (let i = 0; i < numSeasons; i++) {
-    const ageProgress = numSeasons > 1 ? i / (numSeasons - 1) : 0; // 0 (rookie) .. 1 (late)
-    const injured = rng.next() < injuryProneness * 0.25;
+    let base;
+    if (age < peakAge) {
+      const span = peakAge - startAge;
+      const t = span <= 0 ? 1 : Math.min(1, (age - startAge) / span);
+      base = rookieRating + (careerPeak - rookieRating) * easeOut(t); // rising
+    } else if (inPrime) {
+      base = careerPeak; // prime plateau — the true peak shows here
+    } else {
+      base = careerPeak - (age - (peakAge + 2)) * declineRate; // decline
+    }
 
-    // Development is strongest early and tapers; events add upside/downside surprise.
-    const room = trueCeiling - current;
-    const growth = room * developmentRate * 0.35 * (1 - ageProgress * 0.5);
-    const event = rng.gaussian(0, 3);
-    const decline = ageProgress > 0.7 ? (ageProgress - 0.7) * 8 : 0;
+    const injured = rng.next() < injuryProneness * 0.22;
+    let rating = base;
+    if (!inPrime) rating -= Math.abs(rng.gaussian(0, 1.1)); // cosmetic, downward only
+    if (injured) rating -= rng.float(3, 7);
+    rating = Math.round(clampRating(Math.min(rating, careerPeak)));
 
-    let rating = current + growth + event - decline;
-    if (injured) rating -= 6;
-    rating = clampRating(rating);
-    current = rating;
-
-    const roundedRating = Math.round(rating);
-    peak = Math.max(peak, roundedRating);
     seasons.push({
       season: i + 1,
-      rating: roundedRating,
+      age,
+      rating,
       injured,
+      allStar: rating >= 82,
       stats: statLine(rating, position, rng),
     });
   }
 
-  return { seasons, peak: Math.round(peak), verdict: verdictFor(peak) };
+  const peak = Math.max(...seasons.map((s) => s.rating));
+  return {
+    seasons,
+    peak,
+    verdict: verdictFor(peak),
+    careerLength: length,
+    awards: awardsFor(seasons),
+  };
 }
 
 function simulateSingle(prospect, rng) {
-  const { trueOverall, trueCeiling } = prospect.hidden;
-  // One roll for how much of the ceiling gap the player realizes (can over/undershoot).
-  const realized = trueOverall + (trueCeiling - trueOverall) * rng.float(0.3, 1.1);
-  const peak = Math.round(clampRating(realized + rng.gaussian(0, 2)));
-  return { seasons: [], peak, verdict: verdictFor(peak) };
+  const peak = Math.round(realizeCareerPeak(prospect, rng));
+  return {
+    seasons: [],
+    peak,
+    verdict: verdictFor(peak),
+    careerLength: 0,
+    awards: { roy: false, allStarCount: 0, allNbaCount: 0, mvpCount: 0 },
+  };
 }
 
 export function simulateCareer(prospect, rng, mode = 'multi') {

@@ -89,7 +89,20 @@ select { background: var(--panel-2); color: var(--text-h); border: 1px solid var
 .detail__ovr-label { font-size: 0.7rem; color: var(--text-dim); margin-top: 4px; }
 
 .tokens { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
-.tokens__head { font-size: 0.82rem; color: var(--accent-2); margin-bottom: 8px; font-weight: 600; }
+.tokens__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--accent-2); margin-bottom: 8px; font-weight: 600; }
+.btn--ghost { background: transparent; border: 1px solid var(--accent-2); color: var(--accent-2); }
+.btn--ghost:hover:not(:disabled) { background: #14241c; }
+.btn--sm { padding: 4px 9px; font-size: 0.74rem; border-radius: 7px; }
+.btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* Projection (POT) band */
+.band { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+.band__labels { display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--text-dim); margin-bottom: 6px; }
+.band__range { color: var(--text-h); font-weight: 600; }
+.band__tag { color: var(--accent-2); font-weight: 500; }
+.band__track { position: relative; height: 8px; background: #11151d; border-radius: 5px; overflow: hidden; }
+.band__fill { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #2b4a7a, var(--accent)); border-radius: 5px; transition: left 0.2s ease, width 0.2s ease; }
+.band__fill--sharp { background: linear-gradient(90deg, #1f7a52, var(--accent-2)); }
 .tokens__items { display: flex; flex-direction: column; gap: 6px; }
 .token-item { text-align: left; border: 1px dashed var(--border); background: #11151d; color: var(--text); border-radius: 7px; padding: 7px 10px; cursor: pointer; font-size: 0.82rem; }
 .token-item:hover:not(:disabled) { border-color: var(--accent-2); }
@@ -99,6 +112,7 @@ select { background: var(--panel-2); color: var(--text-h); border: 1px solid var
 .intel__line { font-size: 0.82rem; margin: 4px 0; }
 .intel__line--good { color: var(--accent-2); }
 .intel__line--bad { color: var(--danger); }
+.intel__line--neutral { color: var(--text-dim); }
 
 .detail__athletic { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .athletic-pill { font-size: 0.74rem; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }

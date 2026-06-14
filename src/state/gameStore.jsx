@@ -7,7 +7,12 @@
 import { createContext, useContext, useRef, useState } from 'react';
 import { createRng } from '../engine/rng.js';
 import { generateClass } from '../engine/generator.js';
-import { assignLockedItems, createScoutingState, revealItem } from '../engine/scouting.js';
+import {
+  assignLockedItems,
+  createScoutingState,
+  revealItem,
+  deepDive as deepDiveState,
+} from '../engine/scouting.js';
 import { buildDraftBoard } from '../engine/draftAI.js';
 import {
   createDraftState,
@@ -56,6 +61,13 @@ export function GameProvider({ children }) {
     setGame((g) => ({ ...g, scouting: revealItem(g.scouting, prospectId, itemId) }));
   }
 
+  function deepDive(prospectId) {
+    setGame((g) => ({
+      ...g,
+      scouting: deepDiveState(g.scouting, g.lockedItems[prospectId] ?? [], prospectId),
+    }));
+  }
+
   function pick(prospectId) {
     setGame((g) => ({ ...g, draft: makeUserPick(g.draft, prospectId, rngRef.current) }));
   }
@@ -75,10 +87,11 @@ export function GameProvider({ children }) {
     setGame({ phase: 'setup' });
   }
 
-  const value = { game, startDraft, reveal, pick, simulate, reset };
+  const value = { game, startDraft, reveal, deepDive, pick, simulate, reset };
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- the hook lives with its provider
 export function useGame() {
   const ctx = useContext(GameContext);
   if (!ctx) throw new Error('useGame must be used within a GameProvider');

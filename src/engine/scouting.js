@@ -11,7 +11,7 @@ import { SKILL_KEYS, SKILL_LABELS } from './attributes.js';
 
 export const LOCKED_ITEM_TYPES = ['maskedSkill', 'sharpen', 'comp', 'intangible'];
 
-const INTANGIBLES = {
+export const INTANGIBLES = {
   positive: ['Elite work ethic', 'High motor', 'Natural leader', 'Gym rat', 'Clutch gene'],
   negative: [
     'Injury concerns',
@@ -58,12 +58,20 @@ function buildItem(rng, prospect, type, index) {
       };
     }
     case 'intangible': {
-      const positive = rng.next() > 0.45;
-      const pool = positive ? INTANGIBLES.positive : INTANGIBLES.negative;
+      // Reflect the prospect's REAL hidden trait (set in the generator), so the
+      // report is actionable — it tells you which way development will break.
+      const intan = prospect.hidden.intangible;
+      if (!intan) {
+        return {
+          ...base,
+          label: 'Character & intangibles report',
+          payload: { positive: true, neutral: true, trait: 'No red flags — solid pro makeup' },
+        };
+      }
       return {
         ...base,
         label: 'Character & intangibles report',
-        payload: { positive, trait: rng.pick(pool) },
+        payload: { positive: intan.positive, trait: intan.trait },
       };
     }
     default:
@@ -104,5 +112,50 @@ export function revealItem(state, prospectId, itemId) {
   return {
     tokens: state.tokens - 1,
     revealed: { ...state.revealed, [revealKey(prospectId, itemId)]: true },
+  };
+}
+
+// Deep dive: reveal every locked item on one prospect at once. Costs one fewer
+// token than revealing them piecemeal (min 1) — committing fully to a prospect is
+// cheaper per item, creating a concentrate-vs-spread decision. No-op if unaffordable.
+export function deepDiveCost(items, state, prospectId) {
+  const unrevealed = items.filter((it) => !isRevealed(state, prospectId, it.id));
+  return Math.max(0, unrevealed.length - 1);
+}
+
+export function canDeepDive(state, items, prospectId) {
+  const unrevealed = items.filter((it) => !isRevealed(state, prospectId, it.id));
+  return unrevealed.length > 0 && state.tokens >= deepDiveCost(items, state, prospectId);
+}
+
+export function deepDive(state, items, prospectId) {
+  const unrevealed = items.filter((it) => !isRevealed(state, prospectId, it.id));
+  if (unrevealed.length === 0) return state;
+  const cost = deepDiveCost(items, state, prospectId);
+  if (state.tokens < cost) return state;
+  const revealed = { ...state.revealed };
+  for (const it of unrevealed) revealed[revealKey(prospectId, it.id)] = true;
+  return { tokens: state.tokens - cost, revealed };
+}
+
+// --- Projection band (the POT range shown in the UI) ---
+
+// A prospect's effective uncertainty, tightened if a revealed "sharpen" item applies.
+export function effectiveUncertainty(prospect, items, state) {
+  let u = prospect.scouted.uncertainty;
+  for (const it of items) {
+    if (it.type === 'sharpen' && isRevealed(state, prospect.id, it.id)) {
+      u = Math.min(u, it.payload.newUncertainty);
+    }
+  }
+  return u;
+}
+
+// The low–high band where the prospect's ceiling plausibly sits, given uncertainty.
+export function potentialRange(potential, uncertainty) {
+  const half = Math.round(uncertainty);
+  return {
+    low: Math.max(40, Math.round(potential) - half),
+    high: Math.min(99, Math.round(potential) + half),
   };
 }

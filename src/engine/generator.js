@@ -8,6 +8,7 @@
 import { ARCHETYPES } from './archetypes.js';
 import { SKILL_KEYS, ATHLETIC_KEYS } from './attributes.js';
 import { generateName, pickCollege, generateAge } from './names.js';
+import { INTANGIBLES } from './scouting.js';
 
 const BASELINE_SKILL = 50;
 const BASELINE_ATHLETIC = 60;
@@ -20,9 +21,12 @@ export function generateProspect(rng, idSuffix) {
   const arch = rng.pick(ARCHETYPES);
   const age = generateAge(rng);
 
-  // Hidden true ceiling, right-skewed (Math.pow biases the roll low) so stars are rare.
-  const roll = Math.pow(rng.next(), 1.8);
-  const trueCeiling = clamp(48 + roll * (99 - 48), 40, 99);
+  // Hidden true ceiling: most prospects project as future role players / starters,
+  // with a thin right tail of stars (the occasional "star bump"). This keeps the
+  // realized verdict distribution shaped like a real NBA draft class.
+  const base = rng.gaussian(74.5, 7.5);
+  const starBump = rng.next() < 0.055 ? rng.float(3, 12) : 0;
+  const trueCeiling = clamp(base + starBump, 48, 99);
 
   // Rawness: younger prospects sit further below their ceiling now (more upside).
   const rawnessYears = Math.max(0, 22 - age); // 0..4
@@ -50,8 +54,23 @@ export function generateProspect(rng, idSuffix) {
     wingspanIn: rng.int(arch.measurables.wingspanIn[0], arch.measurables.wingspanIn[1]),
   };
 
+  // Hidden intangible trait. It both nudges career development (intangibleMod, read
+  // by careerSim) AND is what a "Character & intangibles report" scouting token
+  // reveals — so spending a token on it is a genuine edge, not flavor text.
+  const intangibleRoll = rng.next();
+  let intangible = null;
+  let intangibleMod = 0;
+  if (intangibleRoll < 0.26) {
+    intangible = { positive: true, trait: rng.pick(INTANGIBLES.positive) };
+    intangibleMod = Number(rng.float(0.06, 0.15).toFixed(3));
+  } else if (intangibleRoll > 0.8) {
+    intangible = { positive: false, trait: rng.pick(INTANGIBLES.negative) };
+    intangibleMod = -Number(rng.float(0.06, 0.17).toFixed(3));
+  }
+
   // Scouting fog — wider band for younger/rawer prospects (the mystery boxes).
-  const uncertainty = clamp(4 + rawnessYears * 2.5 + rng.float(0, 4), 2, 20);
+  // The band is shown as a POT range in the UI; a "sharpen" token narrows it.
+  const uncertainty = clamp(5 + rawnessYears * 3 + rng.float(0, 5), 3, 24);
   const potential = clamp(trueCeiling + rng.gaussian(0, uncertainty / 2), 40, 99);
   const scoutedOverall = clamp(overall + rng.gaussian(0, 2), 35, 99);
 
@@ -76,6 +95,8 @@ export function generateProspect(rng, idSuffix) {
       trueOverall: overall, // true current ability; the sim develops this toward the ceiling
       developmentRate: Number(rng.float(0.7, 1.3).toFixed(2)),
       injuryProneness: Number(rng.float(0, 0.5).toFixed(2)),
+      intangible, // { positive, trait } | null — surfaced via scouting token
+      intangibleMod, // career-realization nudge applied in careerSim
       archetypeId: arch.id,
     },
   };

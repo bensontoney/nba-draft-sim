@@ -17,7 +17,7 @@ const SORTS = {
 };
 
 export default function DraftScreen() {
-  const { game, reveal, pick, simulate } = useGame();
+  const { game, reveal, deepDive, pick, simulate } = useGame();
   const { draft, lockedItems, scouting } = game;
   const [selectedId, setSelectedId] = useState(null);
   const [sort, setSort] = useState('potential');
@@ -96,6 +96,7 @@ export default function DraftScreen() {
             lockedItems={selected ? lockedItems[selected.id] : []}
             scouting={scouting}
             onReveal={reveal}
+            onDeepDive={deepDive}
             onDraft={handleDraft}
             canDraft={userTurn && selected && draft.availableIds.includes(selected.id)}
           />

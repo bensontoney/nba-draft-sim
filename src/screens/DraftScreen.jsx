@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useGame } from '../state/gameStore.jsx';
 import { isDraftComplete, isUserOnClock } from '../engine/draftFlow.js';
 import { prospectValue } from '../engine/draftAI.js';
+import { isRevealed } from '../engine/scouting.js';
 import { POSITIONS } from '../engine/attributes.js';
 import ProspectCard from '../components/ProspectCard.jsx';
 import ProspectDetail from '../components/ProspectDetail.jsx';
@@ -69,14 +70,19 @@ export default function DraftScreen() {
         </div>
 
         <div className="draft__cards">
-          {available.map((p) => (
-            <ProspectCard
-              key={p.id}
-              prospect={p}
-              selected={selected?.id === p.id}
-              onClick={() => setSelectedId(p.id)}
-            />
-          ))}
+          {available.map((p) => {
+            const items = lockedItems[p.id] ?? [];
+            const hiddenCount = items.filter((it) => !isRevealed(scouting, p.id, it.id)).length;
+            return (
+              <ProspectCard
+                key={p.id}
+                prospect={p}
+                selected={selected?.id === p.id}
+                hiddenCount={hiddenCount}
+                onClick={() => setSelectedId(p.id)}
+              />
+            );
+          })}
           {available.length === 0 && <p className="muted">No prospects left.</p>}
         </div>
       </div>

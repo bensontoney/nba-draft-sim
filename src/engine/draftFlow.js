@@ -43,23 +43,36 @@ function applyPick(state, prospect) {
   };
 }
 
+// Resolve a single CPU pick. No-op if the draft is over or the user is on the clock.
+// Stepping one at a time (vs. the loop below) lets the UI pace the draft for drama
+// while drawing from the same seeded rng, so outcomes stay deterministic.
+export function stepCpuPick(state, rng) {
+  if (isDraftComplete(state) || isUserOnClock(state)) return state;
+  const pick = currentPick(state);
+  const available = state.availableIds.map((id) => state.prospectsById[id]);
+  const roster = state.rosters[pick.teamId] ?? [];
+  const chosen = cpuSelect(rng, available, roster);
+  return applyPick(state, chosen);
+}
+
 // Auto-run CPU picks until the user is on the clock or the draft ends.
 export function runCpuUntilUserOrEnd(state, rng) {
   let next = state;
   while (!isDraftComplete(next) && !isUserOnClock(next)) {
-    const pick = currentPick(next);
-    const available = next.availableIds.map((id) => next.prospectsById[id]);
-    const roster = next.rosters[pick.teamId] ?? [];
-    const chosen = cpuSelect(rng, available, roster);
-    next = applyPick(next, chosen);
+    next = stepCpuPick(next, rng);
   }
   return next;
 }
 
-// Apply the user's selection, then let CPUs run up to the user's next turn.
-export function makeUserPick(state, prospectId, rng) {
+// Apply the user's selection only (CPU picks are paced separately by the UI).
+export function applyUserPick(state, prospectId) {
   if (!isUserOnClock(state)) return state;
   const prospect = state.prospectsById[prospectId];
   if (!prospect) return state;
-  return runCpuUntilUserOrEnd(applyPick(state, prospect), rng);
+  return applyPick(state, prospect);
+}
+
+// Apply the user's selection, then let CPUs run up to the user's next turn.
+export function makeUserPick(state, prospectId, rng) {
+  return runCpuUntilUserOrEnd(applyUserPick(state, prospectId), rng);
 }

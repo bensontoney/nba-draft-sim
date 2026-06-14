@@ -6,7 +6,7 @@ function heightStr(inches) {
   return `${Math.floor(inches / 12)}'${inches % 12}"`;
 }
 
-export default function ProspectCard({ prospect, selected, onClick }) {
+export default function ProspectCard({ prospect, selected, hiddenCount = 0, onClick }) {
   const { bio, scouted, measurables } = prospect;
   return (
     <button
@@ -27,6 +27,11 @@ export default function ProspectCard({ prospect, selected, onClick }) {
         <span className="rating-pill rating-pill--pot" title="Scouted potential">
           POT {toGrade(scouted.potential)}
         </span>
+        {hiddenCount > 0 && (
+          <span className="rating-pill rating-pill--locked" title="Unrevealed scouting intel">
+            🔒 {hiddenCount}
+          </span>
+        )}
       </div>
     </button>
   );

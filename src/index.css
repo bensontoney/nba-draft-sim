@@ -77,6 +77,14 @@ select { background: var(--panel-2); color: var(--text-h); border: 1px solid var
 .prospect-card__ratings { display: flex; gap: 6px; flex-shrink: 0; }
 .rating-pill { font-size: 0.72rem; background: #11151d; border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; white-space: nowrap; }
 .rating-pill--pot { color: var(--accent-2); }
+.rating-pill--locked { color: var(--text-dim); }
+
+/* Newest pick flashes in as it lands (draft-night pacing) */
+.order-panel__new { animation: pick-flash 0.7s ease; }
+@keyframes pick-flash {
+  from { background: #20304e; color: var(--text-h); }
+  to { background: transparent; }
+}
 
 /* Detail */
 .draft__detail { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; max-height: 84vh; overflow-y: auto; }
@@ -160,7 +168,40 @@ select { background: var(--panel-2); color: var(--text-h); border: 1px solid var
 .career__table th:first-child { text-align: left; }
 .career__table td { text-align: right; padding: 3px 6px; border-bottom: 1px solid #232834; }
 .career__table td:first-child { text-align: left; color: var(--text-dim); }
-.career__note { color: var(--danger); font-size: 0.72rem; }
+.career__note { font-size: 0.72rem; }
+
+/* Steal / bust badges */
+.badge { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 5px; margin-right: 8px; vertical-align: middle; }
+.badge--steal { background: var(--accent-2); color: #06281a; }
+.badge--bust { background: var(--danger); color: #2b0a04; }
+
+/* Award chips + career arc */
+.awards { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 8px; }
+.award { font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
+.award--roy { background: #e6c029; color: #2b2300; }
+.award--mvp { background: #4f8cff; color: #06122e; }
+.award--as { background: #2b3344; color: var(--text-h); border: 1px solid var(--border); }
+.arc { width: 100%; height: 40px; margin: 4px 0 8px; display: block; }
+.arc__line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.arc__peak { fill: var(--accent-2); }
+
+/* Scorecard (draft grade + biggest steal/bust) */
+.scorecard { display: flex; gap: 16px; align-items: stretch; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.scorecard__grade { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 110px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); padding: 10px 18px; }
+.scorecard__grade-letter { font-size: 2.6rem; font-weight: 800; line-height: 1; color: var(--text-h); }
+.scorecard__grade-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin-top: 4px; }
+.grade--a .scorecard__grade-letter { color: var(--accent-2); }
+.grade--b .scorecard__grade-letter { color: var(--accent); }
+.grade--c .scorecard__grade-letter { color: #e6c029; }
+.grade--d .scorecard__grade-letter, .grade--f .scorecard__grade-letter { color: var(--danger); }
+.scorecard__callouts { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.callout { margin: 0; font-size: 0.88rem; }
+.callout--steal strong { color: var(--accent-2); }
+.callout--bust strong { color: var(--danger); }
+
+/* Reveal-one-at-a-time CTA */
+.reveal-cta { display: flex; gap: 10px; justify-content: center; align-items: center; padding: 28px 12px; }
+.reveal-cta .btn--draft { width: auto; margin: 0; }
 
 @media (max-width: 980px) {
   .draft { grid-template-columns: 1fr; }

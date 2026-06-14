@@ -4,7 +4,7 @@
 // the UI re-renders on change. The seeded RNG is mutable and stateful, so it lives
 // in a ref that persists across renders without triggering re-renders itself.
 
-import { createContext, useContext, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createRng } from '../engine/rng.js';
 import { generateClass } from '../engine/generator.js';
 import {
@@ -16,8 +16,10 @@ import {
 import { buildDraftBoard } from '../engine/draftAI.js';
 import {
   createDraftState,
-  runCpuUntilUserOrEnd,
-  makeUserPick,
+  isDraftComplete,
+  isUserOnClock,
+  stepCpuPick,
+  applyUserPick,
 } from '../engine/draftFlow.js';
 import { simulateCareer } from '../engine/careerSim.js';
 import { TEAM_IDS } from '../data/teams.js';
@@ -41,8 +43,9 @@ export function GameProvider({ children }) {
     for (const p of prospects) lockedItems[p.id] = assignLockedItems(rng, p);
 
     const board = buildDraftBoard(rng, TEAM_IDS, userTeamId, userSlot);
-    let draft = createDraftState({ board, prospects, userTeamId });
-    draft = runCpuUntilUserOrEnd(draft, rng);
+    // CPU picks are paced one-by-one by the effect below, so the draft "runs"
+    // visibly from pick 1 instead of jumping straight to the user's slot.
+    const draft = createDraftState({ board, prospects, userTeamId });
 
     setGame({
       phase: 'draft',
@@ -69,8 +72,24 @@ export function GameProvider({ children }) {
   }
 
   function pick(prospectId) {
-    setGame((g) => ({ ...g, draft: makeUserPick(g.draft, prospectId, rngRef.current) }));
+    // Apply only the user's pick; the effect paces the CPU picks that follow.
+    setGame((g) => ({ ...g, draft: applyUserPick(g.draft, prospectId) }));
   }
+
+  // Draft-night pacing: while a CPU team is on the clock, resolve one pick on a
+  // short timer so picks roll in live. Pauses automatically on the user's turn.
+  useEffect(() => {
+    if (game.phase !== 'draft') return undefined;
+    const d = game.draft;
+    if (isDraftComplete(d) || isUserOnClock(d)) return undefined;
+    const t = setTimeout(() => {
+      setGame((g) => {
+        if (g.phase !== 'draft') return g;
+        return { ...g, draft: stepCpuPick(g.draft, rngRef.current) };
+      });
+    }, 110);
+    return () => clearTimeout(t);
+  }, [game.phase, game.draft]);
 
   function simulate() {
     setGame((g) => {

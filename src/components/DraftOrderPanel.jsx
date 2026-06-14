@@ -37,8 +37,8 @@ export default function DraftOrderPanel({ draft }) {
 
       <h4 className="order-panel__title">Recent Picks</h4>
       <ul className="order-panel__list">
-        {recent.map((p) => (
-          <li key={p.overall}>
+        {recent.map((p, i) => (
+          <li key={p.overall} className={i === 0 ? 'order-panel__new' : undefined}>
             <span className="order-panel__num">#{p.overall}</span> {teamName(p.teamId)} —{' '}
             {draft.prospectsById[p.prospectId].bio.name}
           </li>

@@ -5,6 +5,8 @@ import {
   isUserOnClock,
   currentPick,
   runCpuUntilUserOrEnd,
+  stepCpuPick,
+  applyUserPick,
   makeUserPick,
 } from './draftFlow.js';
 import { buildDraftBoard } from './draftAI.js';
@@ -55,6 +57,55 @@ describe('runCpuUntilUserOrEnd', () => {
     }
     const drafted = state.picks.map((p) => p.prospectId);
     expect(new Set(drafted).size).toBe(drafted.length);
+  });
+});
+
+describe('stepCpuPick', () => {
+  it('resolves exactly one CPU pick and advances by one', () => {
+    const { prospects, board, userTeamId } = setup(2, 'BOS', 6);
+    const state = createDraftState({ board, prospects, userTeamId });
+    const next = stepCpuPick(state, createRng(3));
+    expect(next.picks.length).toBe(1);
+    expect(next.currentIndex).toBe(1);
+  });
+
+  it('is a no-op when the user is on the clock', () => {
+    const { prospects, board, userTeamId } = setup(2, 'BOS', 1); // user picks first
+    const state = createDraftState({ board, prospects, userTeamId });
+    expect(isUserOnClock(state)).toBe(true);
+    expect(stepCpuPick(state, createRng(3))).toBe(state);
+  });
+
+  it('stepping repeatedly matches runCpuUntilUserOrEnd', () => {
+    const { prospects, board, userTeamId } = setup(2, 'BOS', 6);
+    const start = createDraftState({ board, prospects, userTeamId });
+    const looped = runCpuUntilUserOrEnd(start, createRng(3));
+
+    let stepped = start;
+    const rng = createRng(3);
+    while (!isDraftComplete(stepped) && !isUserOnClock(stepped)) {
+      stepped = stepCpuPick(stepped, rng);
+    }
+    expect(stepped.picks).toEqual(looped.picks);
+  });
+});
+
+describe('applyUserPick', () => {
+  it('applies the user pick without running CPU picks', () => {
+    const { prospects, board, userTeamId } = setup(6, 'GSW', 3);
+    let state = createDraftState({ board, prospects, userTeamId });
+    state = runCpuUntilUserOrEnd(state, createRng(7));
+    const before = state.picks.length;
+    const choice = state.availableIds[0];
+    const next = applyUserPick(state, choice);
+    expect(next.picks.length).toBe(before + 1); // exactly one new pick (no CPUs)
+    expect(next.picks.at(-1).prospectId).toBe(choice);
+  });
+
+  it('is a no-op when the user is not on the clock', () => {
+    const { prospects, board, userTeamId } = setup(6, 'GSW', 6);
+    const state = createDraftState({ board, prospects, userTeamId }); // CPU on clock at pick 1
+    expect(applyUserPick(state, state.availableIds[0])).toBe(state);
   });
 });
 
